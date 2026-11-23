@@ -1,8 +1,0 @@
-{
-  "rewrites": [
-    { "source": "/assets/(.*)", "destination": "/api/index/assets/$1" },
-    { "source": "/healthz", "destination": "/api/index/healthz" },
-    { "source": "/favicon.svg", "destination": "/api/index/favicon.svg" },
-    { "source": "/(.*)", "destination": "/api/index" }
-  ]
-}
