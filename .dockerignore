@@ -1,0 +1,9 @@
+**
+!requirements*.txt
+!lablink/
+!lablink/*.py
+!web/
+!web/*.html
+!web/*.css
+!web/*.js
+!Dockerfile

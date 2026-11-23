@@ -1,0 +1,13 @@
+.git
+.gitignore
+.work
+.lablink*
+.env*
+.venv
+tests
+.github
+__pycache__
+*.zip
+*.sqlite*
+node_modules
+

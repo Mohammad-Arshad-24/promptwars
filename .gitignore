@@ -1,0 +1,15 @@
+.work/
+.lablink*
+.env
+.env.*
+*.sqlite*
+*.zip
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+playwright-report/
+test-results/
+node_modules/
+.vercel/
+LabLink-Preview.html
