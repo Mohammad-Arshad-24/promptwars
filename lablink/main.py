@@ -169,9 +169,28 @@ def transaction(user, change):
 def home():
     return FileResponse(STATIC / "index.html")
 
+@app.get("/api/index")
+def vercel_home():
+    return home()
+
 @app.get("/healthz")
 def health():
     return {"status":"ok"}
+
+@app.get("/api/index/healthz")
+def vercel_health():
+    return health()
+
+@app.get("/assets/{filename}")
+def asset(filename: str):
+    if "/" in filename or filename not in {"app.js", "booking.js", "style.css", "favicon.svg"}:
+        raise HTTPException(404, "Asset unavailable")
+    media = "text/css" if filename.endswith(".css") else "image/svg+xml" if filename.endswith(".svg") else "text/javascript"
+    return FileResponse(STATIC / filename, media_type=media)
+
+@app.get("/api/index/assets/{filename}")
+def vercel_asset(filename: str):
+    return asset(filename)
 
 @app.post("/api/demo")
 def demo(response: Response):
