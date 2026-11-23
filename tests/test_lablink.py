@@ -352,3 +352,156 @@ class ApiTests(TestCase):
         with mock.patch.object(main,"campus_now",return_value=NOW.replace(hour=9)):
             self.assertEqual(self.state()["rows"][0]["status"],"expired")
             self.assertEqual(self.state()["busy"],[])
+
+    def test_demo_contains_full_week_timetable_across_multiple_labs(self):
+        classes = self.state()["timetable"]
+        self.assertGreaterEqual(len(classes), 12)
+        self.assertEqual({c["weekday"] for c in classes}, {0, 1, 2, 3, 4})
+        lab_ids = {c["lab_id"] for c in classes}
+        self.assertGreaterEqual(len(lab_ids), 5)
+
+    def test_numbered_empty_lab_and_weekly_timetable_permissions(self):
+        data = dict(name="Network Lab",number="C401",department="Computing",access="Step-free access")
+        self.login()
+        self.assertEqual(self.c.post("/api/labs",json=data).status_code,403)
+        self.login("faculty","coordinator","Computing")
+        lab = self.c.post("/api/labs",json=data).json()
+        self.assertEqual(lab["number"],"C401")
+        self.assertEqual(self.c.post("/api/labs",json=data).status_code,409)
+        self.assertEqual(len(self.state()["labs"]),7)
+        slot = dict(lab_id=lab["id"],weekday=0,start="10:30",end="12:00",
+                    subject="Networks",department="CSE",section="B")
+        entry = self.c.post("/api/timetable",json=slot).json()
+        path = "/api/timetable/"+entry["id"]
+        self.assertEqual(self.c.post("/api/timetable",json=dict(slot,section="A")).status_code,409)
+        second = next(l for l in self.state()["labs"] if l["number"]=="C301")
+        self.assertEqual(self.c.post("/api/timetable",json=dict(slot,lab_id=second["id"])).status_code,409)
+        self.login()
+        self.assertIn(entry,self.state()["timetable"])
+        self.assertEqual(self.c.post(path+"/remove/1",json={}).status_code,403)
+        self.login("faculty","other","Physics")
+        self.assertEqual(self.c.post(path+"/edit/1",json=slot).status_code,403)
+        self.login("faculty","coordinator","Computing")
+        self.assertEqual(self.c.post(path+"/edit/1",json=dict(slot,start="09:30")).status_code,200)
+        self.assertEqual(self.c.post(path+"/remove/1",json={}).status_code,409)
+        self.assertEqual(self.c.post(path+"/remove/2",json={}).status_code,200)
+
+    def test_partial_hour_class_blocks_bookings_and_respects_confirmations(self):
+        self.login("faculty","coordinator","Electronics")
+        lab = next(l for l in self.state()["labs"] if l["number"]=="E204")
+        slot = dict(lab_id=lab["id"],weekday=0,start="09:30",end="11:30",
+                    subject="Signal analysis",department="Electronics",section="A")
+        self.assertEqual(self.c.post("/api/timetable",json=slot).status_code,200)
+        self.assertEqual(self.state()["openings"]["EE-01"]["hour"],12)
+        self.login()
+        booking=req(hours=1,deadline="2030-03-04",until_hour=13,flexible=False)
+        self.assertEqual(self.c.post("/api/requests",json=booking).status_code,200)
+        row=self.state()["rows"][0]
+        self.assertEqual(row["proposal"]["slot"]["hour"],12)
+        self.login("faculty","coordinator","Electronics")
+        self.assertEqual(self.decision(row,"approve").status_code,200)
+        self.assertEqual(self.c.post("/api/timetable",json=dict(slot,start="12:30",end="13:00")).status_code,409)
+        self.assertEqual(self.c.post("/api/timetable",json=dict(slot,start="13:00",end="14:00")).status_code,200)
+
+    def test_request_identity_privacy_and_faculty_sort(self):
+        self.login()
+        for key in ("student_name","registration_id"):
+            self.assertEqual(self.c.post("/api/requests",json=req(**{key:" "})).status_code,422)
+        for title in ["First project","Second project","Third project"]:
+            self.assertEqual(self.c.post("/api/requests",json=req(project=title,flexible=False)).status_code,200)
+        self.login("faculty","coordinator","Electronics")
+        middle=self.state()["rows"][1]
+        self.assertEqual(middle["registration_id"],"DEMO-01")
+        self.assertEqual(self.decision(middle,"decline").status_code,200)
+        rows=self.state()["rows"]
+        self.assertEqual([r["status"] for r in rows],["pending","pending","declined"])
+        self.assertEqual(rows[-1]["id"],middle["id"])
+        self.login(owner="another-student")
+        snapshot=self.state()
+        self.assertEqual(snapshot["rows"],[])
+        self.assertNotIn("DEMO-01",str(snapshot))
+
+    def exact(self, cells, members=("A01",), day="2030-03-04"):
+        return dict(id=str(uuid4()),day=day,project="Signal timing",
+                    members=[dict(name="Student "+m,registration_id=m) for m in members],
+                    slots=[dict(unit=uid,hour=h) for uid,h in cells])
+
+    def test_exact_group_split_booking_approval_and_calendar(self):
+        self.login("faculty","reviewer","Electronics")
+        template=next(u for u in self.state()["catalog"] if u["id"]=="EE-01")
+        self.assertEqual(self.c.post("/api/inventory",json=dict(template,id="EE-07",status="active",revision=0)).status_code,200)
+        self.login(owner="A01")
+        data=self.exact([("EE-01",9),("EE-07",9),("EE-01",15)],("A01","B02","C03"))
+        for _ in range(2):
+            self.assertEqual(self.c.post("/api/slot-requests",json=data).status_code,200)
+        row=self.state()["rows"][0]
+        self.assertEqual(len(self.state()["busy"]),3)
+        self.assertTrue(all(s["mine"] and s["pending"] for s in self.state()["busy"]))
+        calendar="/api/requests/"+row["id"]+"/calendar"
+        self.assertEqual(self.c.get(calendar).status_code,404)
+        self.login(owner="B02")
+        self.assertFalse(self.state()["rows"][0]["can_cancel"])
+        clash=self.exact([("CS-03",15)],("B02",))
+        self.assertEqual(self.c.post("/api/slot-requests",json=clash).status_code,409)
+        self.login("faculty","reviewer","Electronics")
+        self.assertEqual(self.decision(row,"approve").status_code,200)
+        self.login(owner="C03")
+        self.assertEqual(self.state()["rows"][0]["status"],"approved")
+        self.assertEqual(sum(self.state()["metrics"].values()),3)
+        events=self.c.get(calendar)
+        self.assertEqual(events.status_code,200)
+        self.assertEqual(events.text.count("BEGIN:VEVENT"),2)
+        self.assertEqual(events.text.count("BEGIN:VALARM"),4)
+        self.assertIn("DTSTART:20300304T033000Z",events.text)
+        self.login(owner="outsider")
+        self.assertEqual(self.state()["rows"],[])
+        self.assertEqual(self.c.get(calendar).status_code,404)
+        self.login(owner="A01")
+        self.assertEqual(self.decision(self.state()["rows"][0],"cancel").status_code,200)
+        self.assertEqual(self.state()["busy"],[])
+        self.assertEqual(self.c.get(calendar).status_code,404)
+
+    def test_exact_constraints_and_atomic_holds(self):
+        self.login(owner="u1")
+        for cells,members,expected in [
+            ([("EE-01",13)],("A",),409),
+            ([("EE-01",9),("EE-01",10),("EE-01",11)],("A",),422),
+            ([("EE-01",9),("CS-03",9)],("A",),422),
+            ([("EE-01",9),("CS-03",9)],("A","B"),422),
+            ([("EE-01",9)],("A","a"),422),
+            ([("EE-01",9)],("A","B","C","D"),422)]:
+            self.assertEqual(self.c.post("/api/slot-requests",json=self.exact(cells,members)).status_code,expected)
+        def send(i):
+            data=self.exact([("EE-01",10),("EE-01",11)],("A"+str(i),))
+            return self.c.post("/api/slot-requests",json=data).status_code
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            self.assertEqual(sorted(pool.map(send,range(2))),[200,409])
+        row=self.state()["rows"][0]
+        self.login("faculty","reviewer","Physics")
+        self.assertEqual(self.decision(row,"approve").status_code,403)
+        self.login("faculty","reviewer","Electronics")
+        self.assertEqual(self.decision(row,"approve").status_code,200)
+        self.login(owner="u1")
+        self.assertEqual(self.c.get("/api/requests/"+row["id"]+"/calendar").text.count("BEGIN:VEVENT"),1)
+
+    def test_class_closes_cells_and_decline_releases_split_hold(self):
+        self.login("faculty","reviewer","Electronics")
+        lab=next(l for l in self.state()["labs"] if l["number"]=="E204")
+        cls=dict(lab_id=lab["id"],weekday=0,start="10:30",end="11:30",subject="Circuits",department="ECE",section="A")
+        self.assertEqual(self.c.post("/api/timetable",json=cls).status_code,200)
+        self.login()
+        self.assertEqual(self.c.post("/api/slot-requests",json=self.exact([("EE-01",11)])).status_code,409)
+        self.assertEqual(self.c.post("/api/slot-requests",json=self.exact([("EE-01",9),("EE-01",14)])).status_code,200)
+        row=self.state()["rows"][0]
+        self.login("faculty","reviewer","Electronics")
+        self.assertEqual(self.c.post("/api/timetable",json=dict(cls,start="14:30",end="15:00")).status_code,409)
+        self.assertEqual(self.decision(row,"decline").status_code,200)
+        self.assertEqual(self.state()["busy"],[])
+        self.assertEqual(self.c.post("/api/timetable",json=dict(cls,start="14:30",end="15:00")).status_code,200)
+
+    def test_unreviewed_request_expires_at_first_start(self):
+        self.login()
+        self.c.post("/api/slot-requests",json=self.exact([("EE-01",9),("EE-01",14)]))
+        with mock.patch.object(main,"campus_now",return_value=NOW.replace(hour=9)):
+            self.assertEqual(self.state()["rows"][0]["status"],"expired")
+            self.assertEqual(self.state()["busy"],[])

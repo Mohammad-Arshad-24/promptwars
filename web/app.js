@@ -187,7 +187,7 @@ formAction($("#advisor"),async f=>{
   const nodes=[el("p",data.mode,"type")];
   if(!data.matches.length)nodes.push(el("p","No matching equipment found. Try describing the capabilities you need."));
   for(const match of data.matches){const u=unit(match.id), d=el("div");d.append(el("h3",u.name),el("p",match.reason));
-    if(state.role==="student")d.append(button("Request this unit",()=>{$("#advisorBox").close();openBooking(u);}));
+    if(state.role==="student")d.append(button("Request this unit",()=>{$("#advisorBox").close();openBooking(u)}));
     nodes.push(d);}
   $("#advice").replaceChildren(...nodes);
 });
@@ -284,8 +284,9 @@ function labs() {
     const lunch=start===state.lunch;
     const free=closed || lunch || classes.length ? 0 : units.length-unavailable-busy-held;
     const detail=el("details",undefined,"lab-room"), summary=el("summary");
+    const occupancyStatus=closed?"Closed":lunch?"Lunch":classes.length?"Scheduled class":busy+" booked · "+held+" held";
     summary.append(el("strong",lab.room),el("span",lab.department,"details"),
-      el("span",units.length+" units · "+(closed?"Closed":lunch?"Lunch":classes.length?"Scheduled class":busy+" booked · "+held+" held")+" · "+free+" free","lab-count"));
+      el("span",units.length+" units · "+occupancyStatus+" · "+free+" free","lab-count"));
     detail.append(summary,el("p","Lab number: "+(lab.number || "Not recorded")+" · Physical access: "+lab.access));
     for(const c of classes) detail.append(el("p",c.start+"–"+c.end+" IST · "+c.subject+" · "+c.department+" / "+c.section));
     if(!units.length) detail.append(el("p","No equipment assigned yet."));
@@ -317,23 +318,49 @@ function renderTimetable() {
   const slots=state.timetable.filter(c=>matchesSelect("timeDay",String(c.weekday)) &&
     matchesSelect("timeLab",c.lab_id) && matchesSelect("timeDept",c.department) && c.section.toLowerCase().includes(query))
     .sort((a,b)=>a.weekday-b.weekday || a.start.localeCompare(b.start) || a.subject.localeCompare(b.subject));
-  $("#timeCount").textContent=slots.length+" weekly classes";
-  const cards=slots.map(c=>{
-    const room=rooms.get(c.lab_id), card=el("article",undefined,"queueitem");
-    card.append(el("h3",c.subject),el("p",weekdays[c.weekday]+" · "+c.start+"–"+c.end+" IST"),
-      el("p",room.room+" · "+room.department),el("p","Attending department: "+c.department+" · Section: "+c.section));
-    if(canManageLab(room)) {
-      card.append(button("Edit weekly class",()=>openClass(c)));
-      const remove=button("Remove weekly class",async()=>{
-        if (!window.confirm("Remove the weekly "+c.subject+" class for section "+c.section+"?")) return;
-        await api("timetable/"+c.id+"/remove/"+(c.revision || 1),{});await refresh();
-        $("#addClass").focus();say("Weekly class removed.");
-      });
-      card.append(remove);
-    }
-    return card;
-  });
-  $("#timeList").replaceChildren(...(cards.length?cards:[el("p","No weekly classes match this view.")]));
+  $("#timeCount").textContent=slots.length+" weekly classes shown";
+
+  const grid=el("div",undefined,"timetable-grid");
+  grid.setAttribute("role","table");
+  grid.setAttribute("aria-label","Complete Monday to Friday weekly timetable in IST");
+  grid.append(el("div","IST time","timetable-head"));
+  weekdays.forEach(day=>grid.append(el("div",day,"timetable-head")));
+
+  const visibleWeekdays=weekdays.map((day,index)=>index).filter(index=>matchesSelect("timeDay",String(index)));
+  const visibleGrid=el("div",undefined,"timetable-grid timetable-grid-content");
+  visibleGrid.setAttribute("role","table");
+  visibleGrid.style.setProperty("grid-template-columns", "92px repeat("+visibleWeekdays.length+",minmax(150px,1fr))");
+  visibleGrid.append(el("div","IST time","timetable-head"));
+  visibleWeekdays.forEach(index=>visibleGrid.append(el("div",weekdays[index],"timetable-head")));
+
+  for(let hour=9;hour<17;hour++) {
+    const time=el("div",clock(hour)+"–"+clock(hour+1),"timetable-time");
+    time.setAttribute("role","rowheader");
+    visibleGrid.append(time);
+    visibleWeekdays.forEach(day=>{
+      const classes=slots.filter(c=>c.weekday===day &&
+        Number(c.start.slice(0,2)) <= hour && Number(c.end.slice(0,2)) > hour);
+      const cell=el("div",undefined,"timetable-cell");
+      cell.setAttribute("role","cell");
+      cell.setAttribute("aria-label",weekdays[day]+" "+clock(hour)+", "+(classes.length?classes.length+" class": "free period"));
+      for(const c of classes) {
+        const room=rooms.get(c.lab_id);
+        const item=el("article",undefined,"timetable-class");
+        item.append(el("strong",c.subject),el("span",c.start+"–"+c.end+" IST"),el("span",room?room.room:"Lab"),el("span",c.department+" · Section "+c.section));
+        if(canManageLab(room)) {
+          item.append(button("Edit",()=>openClass(c)),button("Remove",async()=>{
+            if(!window.confirm("Remove the weekly "+c.subject+" class?")) return;
+            await api("timetable/"+c.id+"/remove/"+(c.revision||1),{});await refresh();say("Weekly class removed.");
+          }));
+        }
+        cell.append(item);
+      }
+      if(!classes.length) cell.append(el("span","Free","timetable-free"));
+      visibleGrid.append(cell);
+    });
+  }
+
+  $("#timeList").replaceChildren(visibleGrid);
 }
 function prepareForm(form) {
   form.reset();

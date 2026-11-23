@@ -112,9 +112,28 @@ def seed(demo, now):
                              created=now.isoformat()))
     timetable = []
     if demo:
-        timetable.append(dict(id=str(uuid4()),lab_id=tt.lab_key(CATALOG[2]["department"],CATALOG[2]["room"]),
-                              weekday=2,start="13:30",end="15:30",subject="Programming practical",
-                              section="CSE A",department="Computing"))
+        classes = [
+            (0, "Signal Lab · E204", "Analog Systems", "ECE", "A", "09:00", "11:00"),
+            (0, "Compute Lab · C301", "CUDA Programming", "CSE", "A", "12:00", "14:00"),
+            (0, "Vision Lab · D206", "Data Visualisation", "DS", "B", "14:30", "16:30"),
+            (1, "Instrumentation · P112", "Physics Laboratory", "PHY", "A", "09:30", "11:30"),
+            (1, "Embedded Lab · E105", "IoT and Sensors", "ECE", "B", "11:00", "13:00"),
+            (1, "Systems Lab · C104", "Linux Administration", "CSE", "B", "13:30", "15:30"),
+            (2, "Signal Lab · E204", "Programming practical", "CSE", "A", "13:30", "15:30"),
+            (2, "Compute Lab · C301", "Machine Learning Lab", "DS", "A", "09:00", "12:00"),
+            (2, "Instrumentation · P112", "Electronic Measurements", "ECE", "C", "14:00", "16:00"),
+            (3, "Vision Lab · D206", "Computer Vision Lab", "DS", "A", "10:00", "12:30"),
+            (3, "Embedded Lab · E105", "Embedded Systems", "ECE", "A", "13:00", "15:00"),
+            (3, "Systems Lab · C104", "Network Security", "CSE", "C", "15:00", "17:00"),
+            (4, "Compute Lab · C301", "AI Project Workshop", "CSE", "A", "09:00", "11:00"),
+            (4, "Signal Lab · E204", "Oscilloscope Techniques", "PHY", "B", "11:30", "13:30"),
+            (4, "Vision Lab · D206", "Model Deployment", "DS", "C", "14:00", "16:00"),
+        ]
+        for weekday, room, subject, department, section, start, end in classes:
+            room_department = next(u["department"] for u in CATALOG if u["room"] == room)
+            timetable.append(dict(id=str(uuid4()),lab_id=tt.lab_key(room_department,room),
+                                  weekday=weekday,start=start,end=end,subject=subject,
+                                  section=department+" "+section,department=department))
     return {"rows":rows, "calls":[], "timetable":timetable}
 
 def transaction(user, change):
