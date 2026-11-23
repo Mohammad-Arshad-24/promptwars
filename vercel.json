@@ -1,7 +1,0 @@
-{
-  "rewrites": [
-    { "source": "/favicon.svg", "destination": "/app.py" },
-    { "source": "/assets/(.*)", "destination": "/app.py" },
-    { "source": "/(.*)", "destination": "/app.py" }
-  ]
-}
