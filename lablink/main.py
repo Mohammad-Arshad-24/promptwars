@@ -35,7 +35,9 @@ def store():
     if os.getenv("K_SERVICE") or os.getenv("LABLINK_STORE") == "firestore":
         return FirestoreStore()
     if os.getenv("VERCEL"):
-        return BlobStore()
+        if os.getenv("BLOB_READ_WRITE_TOKEN") or os.getenv("VERCEL_BLOB_READ_WRITE_TOKEN"):
+            return BlobStore()
+        return SQLiteStore(os.getenv("LABLINK_DB", "/tmp/lablink.sqlite"))
     return SQLiteStore(os.getenv("LABLINK_DB", ".lablink.sqlite"))
 
 @app.middleware("http")
