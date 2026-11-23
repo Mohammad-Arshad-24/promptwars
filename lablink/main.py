@@ -41,6 +41,18 @@ def store():
     return SQLiteStore(os.getenv("LABLINK_DB", ".lablink.sqlite"))
 
 @app.middleware("http")
+async def vercel_route_prefix(request, call_next):
+    path = request.scope.get("path", "")
+    if path == "/api/index":
+        request.scope["path"] = "/"
+        request.scope["raw_path"] = b"/"
+    elif path.startswith("/api/index/"):
+        original = path[len("/api/index"):]
+        request.scope["path"] = original
+        request.scope["raw_path"] = original.encode()
+    return await call_next(request)
+
+@app.middleware("http")
 async def protect(request, call_next):
     if request.method == "POST" and request.headers.get("x-lablink") != "1":
         return Response("Missing same-origin request header", status_code=403)
