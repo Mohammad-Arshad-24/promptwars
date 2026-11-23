@@ -48,6 +48,8 @@ async def protect(request, call_next):
         return Response("Request too large", status_code=413)
     response = await call_next(request)
     response.headers.update({"X-Content-Type-Options":"nosniff","Referrer-Policy":"no-referrer",
+        "Permissions-Policy":"camera=(), microphone=(), geolocation=(), payment=()",
+        "Cross-Origin-Opener-Policy":"same-origin",
         "Content-Security-Policy":"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
         "Cache-Control":"no-store" if request.url.path.startswith("/api") else "no-cache"})
     return response
