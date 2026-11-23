@@ -589,3 +589,4 @@ button,summary {min-height:44px}
 .timetable-class strong {font-size:13px}
 .timetable-class button {min-height:34px;margin-top:3px;padding:5px 7px;font-size:12px}
 .timetable-free {display:block;color:#75877e;text-align:center;padding-top:28px;font-size:12px}
+.lab-timetable{margin:28px 0 36px}.lab-timetable-title{padding:10px 14px;border-left:5px solid #316650;background:#edf3ea;border-radius:8px}.timetable-scroll{overflow-x:auto}.lab-timetable .timetable-grid-content{min-width:840px}

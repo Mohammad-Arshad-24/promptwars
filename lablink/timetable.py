@@ -23,8 +23,8 @@ class NewLab(Record):
 class ClassSlot(Record):
     lab_id: str = Field(max_length=40)
     weekday: int = Field(ge=0, le=4)
-    start: str = Field(pattern=r"^(09|1[0-7]):[0-5][0-9]$")
-    end: str = Field(pattern=r"^(09|1[0-7]):[0-5][0-9]$")
+    start: str = Field(pattern=r"^(08|09|1[0-7]):[0-5][0-9]$")
+    end: str = Field(pattern=r"^(08|09|1[0-7]):[0-5][0-9]$")
     subject: Label
     department: Label
     section: Label
@@ -76,8 +76,8 @@ def add_class(state, now, user, data, existing=None):
     if lab is None:
         raise HTTPException(404, "Select a listed lab.")
     authorize(user, lab["department"])
-    if not "09:00" <= data.start < data.end <= "17:00":
-        raise HTTPException(422, "Choose a start before the end, within 09:00–17:00.")
+    if not "08:00" <= data.start < data.end <= "17:00":
+        raise HTTPException(422, "Choose a start before the end, within 08:00–17:00.")
     for slot in state["timetable"]:
         if slot is existing:
             continue
@@ -117,7 +117,7 @@ def class_hours(state):
     hours = {}
     for slot in state["timetable"]:
         cells = hours.setdefault(slot["lab_id"], set())
-        for hour in range(9,17):
+        for hour in range(8,17):
             if overlaps(slot["start"],slot["end"],f"{hour:02}:00",f"{hour+1:02}:00"):
                 cells.add((slot["weekday"],hour))
     by_room = {(l["department"],l["room"]):hours.get(l["id"], ()) for l in state["labs"]}
