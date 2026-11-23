@@ -362,3 +362,7 @@ def advice(data: Project, request: Request):
         allow_model = store().transact("advisor-hourly-budget", reserve_call, dict)
     return match_project(data.project, allow_model, catalog)
 
+@app.get("/favicon.svg")
+def favicon():
+    return FileResponse(STATIC / "favicon.svg", media_type="image/svg+xml")
+

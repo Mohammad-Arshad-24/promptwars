@@ -1,8 +1,7 @@
 {
-  "builds": [
-    { "src": "app.py", "use": "@vercel/python" }
-  ],
-  "routes": [
-    { "src": "/(.*)", "dest": "app.py" }
+  "rewrites": [
+    { "source": "/favicon.svg", "destination": "/app.py" },
+    { "source": "/assets/(.*)", "destination": "/app.py" },
+    { "source": "/(.*)", "destination": "/app.py" }
   ]
 }

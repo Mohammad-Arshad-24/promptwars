@@ -15,7 +15,8 @@ def signing_key():
     if os.getenv("K_SERVICE"):
         raise RuntimeError("Set LABLINK_SECRET to at least 32 random characters")
     if os.getenv("VERCEL"):
-        return secrets.token_bytes(48)
+        host = os.getenv("VERCEL_URL") or os.getenv("VERCEL_PROJECT_PRODUCTION_URL") or "lablink-private-demo"
+        return hashlib.sha256(("lablink-demo-signing:" + host).encode()).digest()
     path = Path(".lablink-key")
     if not path.exists():
         try:
